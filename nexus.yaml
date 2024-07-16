@@ -1,0 +1,131 @@
+---
+- name: install java and net tools
+  hosts: webservers
+  tasks:
+          - name: update yum repo and cache
+            yum: update_cache=yes
+
+          - name: install java 1.8.0 and net-tools
+            yum:
+              name:
+                - java-1.8.0-openjdk
+                - java-1.8.0-openjdk-devel
+                - net-tools
+
+- name: Download and unpack nexus installer
+  hosts: webservers
+  tasks:
+          - name: check if tar file is exist
+            stat:
+              path: /opt/nexus-3.70.1-02-unix.tar.gz
+            register: stat_result1
+
+          - name: check if nexus directory is exist
+            stat:
+              path: /opt/nexus
+            register: stat_result2
+
+          - name: download nexus
+            get_url:
+               url: https://download.sonatype.com/nexus/3/latest-unix.tar.gz
+               dest: /opt
+            when: not stat_result1.stat.exists
+            register: download_result
+
+          - name: unpack tar file
+            unarchive:
+               src: "{{download_result.dest}}"
+               dest: /opt/
+               remote_src: yes
+            when: not stat_result2.stat.exists
+
+          - name: find nexus directory
+            find:
+              paths: /opt
+              pattern: "nexus-*"
+              file_type: directory
+            register: find_result
+
+          - name: check if nexus directory is exist
+            stat:
+              path: /opt/nexus
+            register: stat_result
+
+          - name: rename nexus directory
+            shell: mv {{find_result.files[0].path}} /opt/nexus
+            when: not stat_result.stat.exists
+
+- name: create nexus user to own nexus dirctories
+  hosts: webservers
+  tasks:
+    - name: create or Ensure nexus group for nexus user
+      group:
+        name: nexus
+
+    - name: create nexus user
+      user:
+        name: nexus
+        group: nexus
+
+#    - name: make nexus to be the owner and group for nexus directories
+    - name: make nexus to be the owner and group for nexus directory
+#      shell: |
+#          chown -R root:root /opt/nexus
+#          chown -R root:root /opt/sonatype-work
+      file:
+        path: /opt/nexus
+        state: directory
+        owner: nexus
+        group: nexus
+        recurse: yes
+
+    - name: make nexus to be the owner and group for sonatype-work directory
+      file:
+        path: /opt/sonatype-work
+        state: directory
+        owner: nexus
+        group: nexus
+        recurse: yes
+
+- name: start nexus with nexus user
+  hosts: webservers
+  become: True
+  become_user: nexus
+  tasks:
+
+    - name: set run_as_user nexus
+#      blockinfile:
+#        path: /opt/nexus/bin/nexus.rc
+#        block: |
+#          run_as_user="nexus"
+      lineinfile:
+        path: /opt/nexus/bin/nexus.rc
+        regexp: '^#run_as_user=""'
+        line: run_as_user="nexus"
+
+    - name: start nexus 
+      command: /opt/nexus/bin/nexus start
+
+- name: Verify the nexus is running
+  hosts: webservers
+  tasks:     
+    
+    - name: open port 8081 in firewall
+      shell: |
+        systemctl start firewalld
+        systemctl enable firewalld
+        firewall-cmd --add-port=8081/tcp --permanent
+        firewall-cmd --reload
+    - name: check with ps command
+      shell: ps aux | grep nexus
+      register: app_status
+    - debug: msg={{app_status.stdout_lines}}
+
+    - name: wait one minute
+      pause:
+        minutes: 1
+
+    - name: check with netstat command
+      shell: netstat -lnpt
+      register: netstat_result
+    - debug: msg={{netstat_result.stdout_lines}}

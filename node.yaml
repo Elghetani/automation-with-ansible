@@ -1,0 +1,72 @@
+
+---
+- name: configure and run node application on server
+  hosts: webservers
+  tasks:
+        - name: install npm and nodejs
+          yum:
+           name:
+            - nodejs
+            - npm
+
+
+########################## I can make new user for nodejs app to run tasks with  ###########################
+- name: create new user for nodejs app
+  hosts: webservers
+  tasks:
+    - name: create admin group for node user
+      group:
+        name: admin
+
+    - name: create new user
+      user:
+        name: node
+        comment: node app
+        group: admin
+
+
+- name: deploy nodejs app on server
+  hosts: webservers
+  become: True
+  become_user: node
+  vars_files: node-vars
+  tasks:
+
+############## I can use copy module and unarchive module together but here I used just unarchive module in one step ############
+
+         #- name: copy nodejs folder to a server
+         #  copy:
+         #          src: "{{destination}}nodejs-app-{{version}}.tgz"
+         #          dest: /root/nodejs-app-{{version}}.tgz
+          - name: check if file is exist
+            stat:
+              path: "{{home_dir}}node-app"
+            register: stat_result
+          - name: copy and unpack nodejs files in one step
+            copy:
+#                    src: "{{destination}}nodejs-app-{{version}}.tgz"
+#                    dest: "{{home_dir}}"
+                     src: /root/node-app/
+                     dest: "{{home_dir}}node-app"
+#                     remote_src: yes
+            when: not stat_result.stat.exists
+          - name: install dependencies
+            npm:
+                    path: "{{home_dir}}node-app"
+          - name: start the node app
+            command:
+                    chdir: "{{home_dir}}node-app/app"
+                    cmd: node server
+            async: 1000
+            poll: 0
+          - name: open port 3000 in firewall
+            shell: |
+              systemctl start firewalld
+              systemctl enable firewalld
+              firewall-cmd --add-port=3000/tcp --permanent
+              firewall-cmd --reload
+              
+          - name: Ensure the app is running
+            shell: ps aux | grep node
+            register: app_status
+          - debug: msg={{app_status.stdout_lines}}
