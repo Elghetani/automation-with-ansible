@@ -18,7 +18,8 @@
 # Ex 2: A collection of hosts belonging to the 'webservers' group:
 [webservers]
 192.168.177.151
- 
+[docker_server]
+192.168.177.151 
 ## [webservers]
 ## alpha.example.org
 ## beta.example.org

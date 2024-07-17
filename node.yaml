@@ -59,6 +59,9 @@
                     cmd: node server
             async: 1000
             poll: 0
+- name: firewall and port configuration
+  hosts: webservers
+  tasks:
           - name: open port 3000 in firewall
             shell: |
               systemctl start firewalld

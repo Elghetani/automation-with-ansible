@@ -1,0 +1,12 @@
+---
+- name: install docker
+  hosts: docker_server
+  tasks:
+          - name: update cache
+            yum: update_cache=yes
+
+          - name: install docker
+            yum: 
+              name: docker
+              
+
