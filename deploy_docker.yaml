@@ -1,12 +1,41 @@
 ---
-- name: install docker
+- name: install python3 and docker
   hosts: docker_server
+  become: yes
   tasks:
-          - name: update cache
-            yum: update_cache=yes
+          - name: install python3 and docker
+#            vars:
+#              ansible_python_interpreter: /usr/bin/python
+            yum:
+              name:
+               - python3
+               - docker
+              update_cache: yes
 
-          - name: install docker
-            yum: 
+          - name: download and install docker-compose
+            get_url:
+               url: https://github.com/docker/compose/releases/download/1.27.4/docker-compose-{{lookup('pipe', 'uname -s')}}-{{lookup('pipe', 'uname -m')}}
+               dest: /usr/local/bin/docker-compose
+               mode: +x
+
+
+          - name: start docker daemon
+            systemd: 
               name: docker
-              
+              state: started
 
+
+          - name: adding ec2-user in docker group
+            user:
+              name: ec2-user
+              groups: docker
+              append: yes
+
+          - name: reconnect the host session
+            meta: reset_connection
+
+- name: testing docker 
+  hosts: docker_server
+  tasks: 
+          - name: pulling redis image
+            command: docker pull redis
